@@ -210,8 +210,15 @@ function parseTagParam(name, param) {
     case 'EXT-X-TARGETDURATION':
     case 'EXT-X-MEDIA-SEQUENCE':
     case 'EXT-X-DISCONTINUITY-SEQUENCE':
-    case 'EXT-X-CUE-OUT':
       return [utils.toNumber(param), null];
+    case 'EXT-X-CUE-OUT':
+      // For backwards compatibility: attributes list is optional,
+      // if only a number is found, use it as the duration
+      if (!Number.isNaN(Number(param))) {
+        return [utils.toNumber(param), null];
+      }
+      // If attributes are found, parse them out (i.e. DURATION)
+      return [null, parseAttributeList(param)];
     case 'EXT-X-KEY':
     case 'EXT-X-MAP':
     case 'EXT-X-DATERANGE':
@@ -939,7 +946,10 @@ function parseTag(line, params) {
 function lexicalParse(text, params) {
   const lines = [];
   for (const l of text.split('\n')) {
-    const line = l.trim();
+    // V8 has garbage collection issues when cleaning up substrings split from strings greater
+    // than 13 characters so before we continue we need to safely copy over each line so that it
+    // doesn't hold any reference to the containing string.
+    const line = Buffer.from(l.trim()).toString();
     if (!line) {
       // empty line
       continue;
